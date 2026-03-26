@@ -1,0 +1,63 @@
+-- 帖子表
+CREATE TABLE IF NOT EXISTS post (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+  title VARCHAR(256) NOT NULL COMMENT '标题',
+  content TEXT NOT NULL COMMENT '内容',
+  tags JSON NULL COMMENT '标签(JSON数组)',
+  thumb_num INT NOT NULL DEFAULT 0 COMMENT '点赞数',
+  favour_num INT NOT NULL DEFAULT 0 COMMENT '收藏数',
+  user_id BIGINT NOT NULL COMMENT '创建用户ID',
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  is_delete TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除',
+  KEY idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='帖子';
+
+-- 帖子点赞表
+CREATE TABLE IF NOT EXISTS post_thumb (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+  post_id BIGINT NOT NULL COMMENT '帖子ID',
+  user_id BIGINT NOT NULL COMMENT '用户ID',
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  UNIQUE KEY uk_post_user (post_id, user_id),
+  KEY idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='帖子点赞';
+
+-- 帖子收藏表
+CREATE TABLE IF NOT EXISTS post_favour (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+  post_id BIGINT NOT NULL COMMENT '帖子ID',
+  user_id BIGINT NOT NULL COMMENT '用户ID',
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  UNIQUE KEY uk_post_user (post_id, user_id),
+  KEY idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='帖子收藏';
+
+-- 帖子评论表
+CREATE TABLE IF NOT EXISTS post_comment (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+  post_id BIGINT NOT NULL COMMENT '帖子ID',
+  user_id BIGINT NOT NULL COMMENT '用户ID',
+  content TEXT NOT NULL COMMENT '评论内容',
+  parent_id BIGINT NULL COMMENT '父评论ID',
+  thumb_num INT NOT NULL DEFAULT 0 COMMENT '点赞数',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '状态(1正常/0隐藏)',
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  is_delete TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除',
+  KEY idx_post_id (post_id),
+  KEY idx_user_id (user_id),
+  KEY idx_parent_id (parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='帖子评论';
+
+-- 帖子评论点赞表
+CREATE TABLE IF NOT EXISTS post_comment_thumb (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+  comment_id BIGINT NOT NULL COMMENT '评论ID',
+  user_id BIGINT NOT NULL COMMENT '用户ID',
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '点赞时间',
+  UNIQUE KEY uk_comment_user (comment_id, user_id),
+  KEY idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='帖子评论点赞';
