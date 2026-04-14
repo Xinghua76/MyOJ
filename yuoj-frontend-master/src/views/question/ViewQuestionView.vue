@@ -195,6 +195,116 @@
               </a-descriptions>
             </a-card>
           </a-tab-pane>
+          <!-- AI 分析 Tab -->
+          <a-tab-pane key="ai" title="AI 分析">
+            <a-card
+              :bordered="false"
+              class="ai-card"
+              style="background: #fafafa"
+            >
+              <template #title>
+                <a-space :size="12">
+                  <icon-robot size="20" style="color: #ff7a45" />
+                  <span style="font-weight: 500">AI 编程导师</span>
+                </a-space>
+              </template>
+
+              <!-- 加载状态 -->
+              <div
+                v-if="isAiLoading"
+                style="text-align: center; padding: 40px 20px"
+              >
+                <a-spin dot size="large" />
+                <div style="margin-top: 20px; color: #666; font-size: 14px">
+                  正在深度分析你的代码...
+                </div>
+                <div style="margin-top: 8px; color: #999; font-size: 12px">
+                  这通常需要 5-30 秒
+                </div>
+              </div>
+
+              <!-- 分析成功 -->
+              <div v-else-if="aiResult">
+                <!-- AI 分析结果信息栏 -->
+                <a-alert
+                  v-if="aiResult.includes('⚠️')"
+                  type="warning"
+                  style="margin-bottom: 16px; padding: 12px"
+                >
+                  <template #title>
+                    <span style="font-weight: 500">系统预设建议</span>
+                  </template>
+                  <div style="font-size: 12px; color: #999">
+                    AI 服务暂时不可用，已由系统提供预设建议
+                  </div>
+                </a-alert>
+                <a-alert
+                  v-else
+                  type="success"
+                  style="margin-bottom: 16px; padding: 12px"
+                >
+                  <template #title>
+                    <span style="font-weight: 500">AI 分析完成</span>
+                  </template>
+                  <div style="font-size: 12px; color: #999">
+                    由 DeepSeek AI 提供专业编程指导
+                  </div>
+                </a-alert>
+
+                <!-- 分析内容 -->
+                <div class="ai-result-content">
+                  <MdViewer :value="aiResult" />
+                </div>
+
+                <!-- 操作按钮栏 -->
+                <a-divider style="margin: 16px 0" />
+                <a-space style="width: 100%">
+                  <a-button
+                    type="primary"
+                    size="small"
+                    @click="copyAiResult"
+                    style="flex: 1"
+                  >
+                    <template #icon><icon-copy /></template>
+                    复制结果
+                  </a-button>
+                  <a-button
+                    type="outline"
+                    size="small"
+                    @click="askAi"
+                    :loading="isAiLoading"
+                    style="flex: 1"
+                  >
+                    <template #icon><icon-refresh /></template>
+                    重新分析
+                  </a-button>
+                </a-space>
+              </div>
+
+              <!-- 空状态 -->
+              <div v-else style="text-align: center; padding: 40px 20px">
+                <div style="font-size: 40px; margin-bottom: 16px">🤖</div>
+                <div style="color: #666; font-size: 14px; margin-bottom: 8px">
+                  AI 代码分析助手
+                </div>
+                <div style="color: #999; font-size: 12px; margin-bottom: 20px">
+                  使用 AI 深度分析你的代码，找到问题所在
+                </div>
+                <a-button
+                  v-if="form.code && form.language"
+                  type="primary"
+                  @click="askAi"
+                  :loading="isAiLoading"
+                >
+                  <template #icon><icon-robot /></template>
+                  开始分析
+                </a-button>
+                <div v-else style="color: #ccc; font-size: 12px">
+                  请先编写代码
+                </div>
+              </div>
+            </a-card>
+          </a-tab-pane>
         </a-tabs>
       </a-col>
     </a-row>
@@ -214,6 +324,7 @@ import {
   QuestionVO,
   BaseResponse_QuestionSubmitVO_,
 } from "../../../generated";
+import { AiControllerService } from "../../../generated";
 import { useRouter } from "vue-router";
 import {
   IconStar,
@@ -223,6 +334,7 @@ import {
   IconCloseCircleFill,
   IconCode,
 } from "@arco-design/web-vue/es/icon";
+import { IconRobot, IconCopy, IconRefresh } from "@arco-design/web-vue/es/icon";
 import axios from "axios";
 import {
   isAcceptedJudgeMessage,
@@ -242,6 +354,10 @@ const question = ref<QuestionVO>();
 const isFavour = ref(false);
 const activeKey = ref("code");
 const submitResult = ref<QuestionSubmitVO>();
+
+// AI 助手相关
+const aiResult = ref("");
+const isAiLoading = ref(false);
 
 const loadData = async () => {
   const res = await QuestionControllerService.getQuestionVoByIdUsingGet(
@@ -385,6 +501,132 @@ onMounted(() => {
   loadDraft();
 });
 
+/**
+ * 复制 AI 分析结果到剪贴板
+ */
+const copyAiResult = async () => {
+  try {
+    // 移除 Markdown 标记中的文本内容（仅保留纯文本）
+    const plainText = aiResult.value
+      .replace(/#{1,6}\s/g, "") // 移除标题标记
+      .replace(/\*\*|__/g, "") // 移除粗体标记
+      .replace(/\*|_/g, "") // 移除斜体标记
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // 移除链接标记
+      .replace(/`{3}[\s\S]*?`{3}/g, (match) => {
+        // 代码块：保留内容，移除标记
+        return match.replace(/`{3}/g, "").trim();
+      })
+      .replace(/`([^`]+)`/g, "$1"); // 移除行内代码标记
+
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(plainText);
+      message.success("已复制到剪贴板");
+    } else {
+      // 降级方案：使用 document.execCommand
+      const textarea = document.createElement("textarea");
+      textarea.value = plainText;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      message.success("已复制到剪贴板");
+    }
+  } catch (e) {
+    console.error("复制失败", e);
+    message.error("复制失败，请手动复制");
+  }
+};
+
+/**
+ * 询问 AI 执行分析
+ */
+const askAi = async () => {
+  // 前置校验
+  if (!question.value?.id) {
+    message.error("题目加载中，请稍后");
+    return;
+  }
+  if (!form.value.code || form.value.code.trim() === "") {
+    message.warning("请先编写代码");
+    return;
+  }
+  if (!form.value.language) {
+    message.warning("请选择编程语言");
+    return;
+  }
+
+  // 检查代码长度
+  if (form.value.code.length > 50000) {
+    message.error("代码长度超过限制（最多 50000 字符）");
+    return;
+  }
+
+  isAiLoading.value = true;
+  aiResult.value = ""; // 清空之前的结果，开始新的分析
+  // 自动切换到 AI 分析 Tab
+  activeKey.value = "ai";
+
+  try {
+    const res = await AiControllerService.analyzeCodeUsingPost({
+      questionId: question.value.id as any,
+      code: form.value.code,
+      language: form.value.language,
+      judgeInfo: JSON.stringify(submitResult.value?.judgeInfo || {}),
+    });
+
+    if (res.code === 0) {
+      const analysisResult = res.data || "AI 暂无反馈，请稍后再试";
+      aiResult.value = analysisResult;
+
+      if (analysisResult.includes("⚠️")) {
+        message.warning("AI 服务暂时不可用，已自动提供系统预设建议");
+      } else {
+        message.success("AI 分析完成，请查看 AI 分析 Tab 的详细建议");
+      }
+    } else if (res.code === 401) {
+      message.error("请先登录才能使用 AI 助手");
+    } else if (res.code === 400) {
+      message.error("参数错误: " + res.message);
+    } else if (res.code === 404) {
+      message.error("题目不存在或已删除");
+    } else {
+      message.error("AI 分析失败: " + (res.message || "未知错误"));
+      aiResult.value = "⚠️ 分析过程中出现错误\n\n请稍后重试，或联系管理员";
+    }
+  } catch (error: any) {
+    console.error("AI 分析异常", error);
+
+    // 区分不同的错误类型，提供更好的用户提示
+    if (error.response?.status === 401) {
+      message.error("您的登录已过期，请重新登录");
+    } else if (error.response?.status === 400) {
+      message.error("请求参数有误，请检查代码是否为空");
+    } else if (error.response?.status === 403) {
+      message.error("没有权限使用 AI 助手");
+    } else if (error.response?.status === 404) {
+      message.error("题目不存在，请返回重新选择");
+    } else if (error.response?.status === 500) {
+      message.error("服务器错误，请稍后重试");
+      aiResult.value = "⚠️ 服务器出错\n\n请稍后重新分析";
+    } else if (error.message?.includes("timeout")) {
+      message.error("分析超时，请检查网络或稍后重试");
+      aiResult.value =
+        "⚠️ 请求超时\n\n AI 分析耗时较长，请点击 '重新分析' 重试";
+    } else if (error.message?.includes("Network")) {
+      message.error("网络连接失败，请检查网络");
+    } else {
+      message.error("AI 分析失败，请稍后重试");
+      aiResult.value =
+        "⚠️ 分析过程中出现错误\n\n请点击 '重新分析' 重试，或稍后再试";
+    }
+  } finally {
+    isAiLoading.value = false;
+  }
+};
+
+/**
+ * 代码变更
+ */
 const changeCode = (value: string) => {
   form.value.code = value;
   saveDraft();

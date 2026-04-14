@@ -4,7 +4,10 @@
 /* eslint-disable */
 
 export type JudgeInfo = {
-    memory?: number;
+    actualOutput?: string;
+    expectedOutput?: string;
+    input?: string;
     message?: string;
+    memory?: number;
     time?: number;
 };

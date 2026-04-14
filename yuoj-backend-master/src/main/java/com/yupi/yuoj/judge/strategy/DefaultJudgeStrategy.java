@@ -36,6 +36,12 @@ public class DefaultJudgeStrategy implements JudgeStrategy {
         if (outputList.size() != inputList.size()) {
             judgeInfoMessageEnum = JudgeInfoMessageEnum.WRONG_ANSWER;
             judgeInfoResponse.setMessage(judgeInfoMessageEnum.getValue());
+            // 设置第一个失败的用例信息
+            if (inputList.size() > outputList.size()) {
+                judgeInfoResponse.setInput(inputList.get(outputList.size()));
+                judgeInfoResponse.setExpectedOutput(judgeCaseList.get(outputList.size()).getOutput());
+                judgeInfoResponse.setActualOutput("无输出");
+            }
             return judgeInfoResponse;
         }
         // 依次判断每一项输出和预期输出是否相等
@@ -44,6 +50,10 @@ public class DefaultJudgeStrategy implements JudgeStrategy {
             if (!judgeCase.getOutput().equals(outputList.get(i))) {
                 judgeInfoMessageEnum = JudgeInfoMessageEnum.WRONG_ANSWER;
                 judgeInfoResponse.setMessage(judgeInfoMessageEnum.getValue());
+                // 设置第一个失败的用例信息
+                judgeInfoResponse.setInput(judgeCase.getInput());
+                judgeInfoResponse.setExpectedOutput(judgeCase.getOutput());
+                judgeInfoResponse.setActualOutput(outputList.get(i));
                 return judgeInfoResponse;
             }
         }

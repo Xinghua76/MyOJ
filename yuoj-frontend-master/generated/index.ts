@@ -94,8 +94,10 @@ export { AdminOpLogControllerService } from "./services/AdminOpLogControllerServ
 export { NoticeControllerService } from "./services/NoticeControllerService";
 export { SolutionCommentControllerService } from "./services/SolutionCommentControllerService";
 export { PostCommentControllerService } from "./services/PostCommentControllerService";
+export { AiControllerService } from "./services/AiControllerService";
 export type { SolutionCommentVO } from "./models/SolutionCommentVO";
 export type { PostCommentVO } from "./models/PostCommentVO";
 export type { SolutionCommentAddRequest } from "./models/SolutionCommentAddRequest";
 export type { SolutionCommentQueryRequest } from "./models/SolutionCommentQueryRequest";
+export type { AiAnalysisRequest } from "./models/AiAnalysisRequest";
 export type { SolutionCommentUpdateRequest } from "./models/SolutionCommentUpdateRequest";

@@ -22,4 +22,19 @@ public class JudgeInfo {
      * 消耗时间（KB）
      */
     private Long time;
+
+    /**
+     * 第一个失败用例的输入
+     */
+    private String input;
+
+    /**
+     * 第一个失败用例的期望输出
+     */
+    private String expectedOutput;
+
+    /**
+     * 第一个失败用例的实际输出
+     */
+    private String actualOutput;
 }
