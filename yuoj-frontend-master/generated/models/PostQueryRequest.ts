@@ -11,6 +11,8 @@ export type PostQueryRequest = {
     notId?: number;
     orTags?: Array<string>;
     pageSize?: number;
+    postType?: string;
+    questionId?: number;
     searchText?: string;
     sortField?: string;
     sortOrder?: string;

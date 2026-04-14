@@ -11,6 +11,16 @@ import lombok.Data;
 public class PostEditRequest implements Serializable {
 
     /**
+     * 帖子类型（discussion / solution）
+     */
+    private String postType;
+
+    /**
+     * 关联题目 id（仅题解需要）
+     */
+    private Long questionId;
+
+    /**
      * id
      */
     private Long id;

@@ -115,6 +115,7 @@ const total = ref(0);
 const searchParams = ref<PostQueryRequest>({
   searchText: "",
   tags: [],
+  postType: "discussion",
   pageSize: 10,
   current: 1,
 });

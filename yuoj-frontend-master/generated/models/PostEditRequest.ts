@@ -6,6 +6,8 @@
 export type PostEditRequest = {
     content?: string;
     id?: number;
+    postType?: string;
+    questionId?: number;
     tags?: Array<string>;
     title?: string;
 };

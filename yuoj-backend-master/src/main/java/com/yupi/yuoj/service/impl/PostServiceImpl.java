@@ -39,6 +39,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements PostService {
 
+    private static final String POST_TYPE_DISCUSSION = "discussion";
+    private static final String POST_TYPE_SOLUTION = "solution";
+    private static final String SOLUTION_MARKER = "__solution__";
+    private static final String QUESTION_MARKER_PREFIX = "__question_";
+    private static final String QUESTION_MARKER_SUFFIX = "__";
+
     @Resource
     private UserService userService;
 
@@ -83,6 +89,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         List<String> orTagList = postQueryRequest.getOrTags();
         Long userId = postQueryRequest.getUserId();
         Long notId = postQueryRequest.getNotId();
+        String postType = postQueryRequest.getPostType();
+        Long questionId = postQueryRequest.getQuestionId();
         // 拼接查询条件
         if (StringUtils.isNotBlank(searchText)) {
             queryWrapper.and(qw -> qw.like("title", searchText).or().like("content", searchText));
@@ -106,12 +114,24 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 }
             });
         }
+        if (POST_TYPE_SOLUTION.equalsIgnoreCase(postType) || ObjectUtils.isNotEmpty(questionId)) {
+            queryWrapper.like("tags", "\"" + SOLUTION_MARKER + "\"");
+        } else if (POST_TYPE_DISCUSSION.equalsIgnoreCase(postType)) {
+            queryWrapper.notLike("tags", "\"" + SOLUTION_MARKER + "\"");
+        }
+        if (ObjectUtils.isNotEmpty(questionId)) {
+            queryWrapper.like("tags", "\"" + buildQuestionMarker(questionId) + "\"");
+        }
         queryWrapper.ne(ObjectUtils.isNotEmpty(notId), "id", notId);
         queryWrapper.eq(ObjectUtils.isNotEmpty(id), "id", id);
         queryWrapper.eq(ObjectUtils.isNotEmpty(userId), "user_id", userId);
         boolean asc = CommonConstant.SORT_ORDER_ASC.equals(sortOrder);
         queryWrapper.orderBy(SqlUtils.validSortField(sortField), asc, sortField);
         return queryWrapper;
+    }
+
+    private String buildQuestionMarker(Long questionId) {
+        return QUESTION_MARKER_PREFIX + questionId + QUESTION_MARKER_SUFFIX;
     }
 
     @Override

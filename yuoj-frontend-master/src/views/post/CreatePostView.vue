@@ -112,6 +112,7 @@ const handleSubmit = async () => {
       title: form.value.title,
       content: form.value.content,
       tags: form.value.tags,
+      postType: "discussion",
     };
     const editRes = await PostControllerService.editPostUsingPost(editPayload);
     if (editRes.code === 0) {
@@ -123,7 +124,10 @@ const handleSubmit = async () => {
     return;
   }
 
-  const addRes = await PostControllerService.addPostUsingPost(form.value);
+  const addRes = await PostControllerService.addPostUsingPost({
+    ...form.value,
+    postType: "discussion",
+  });
   if (addRes.code === 0) {
     message.success("发布成功");
     router.push(`/post/view/${addRes.data}`);

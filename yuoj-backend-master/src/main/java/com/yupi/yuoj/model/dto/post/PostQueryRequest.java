@@ -14,6 +14,16 @@ import lombok.EqualsAndHashCode;
 public class PostQueryRequest extends PageRequest implements Serializable {
 
     /**
+     * 帖子类型（discussion / solution）
+     */
+    private String postType;
+
+    /**
+     * 关联题目 id（仅题解查询使用）
+     */
+    private Long questionId;
+
+    /**
      * id
      */
     private Long id;

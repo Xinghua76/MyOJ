@@ -1,7 +1,7 @@
 <template>
   <div id="questionSolutionList">
     <div class="header">
-      <a-button type="primary" @click="showAddModal = true">发布题解</a-button>
+      <a-button type="primary" @click="openAddSolutionModal">发布题解</a-button>
     </div>
     <a-divider />
     <a-list
@@ -29,9 +29,12 @@
             </template>
             <template #description>
               <div>
-                <a-tag v-for="tag in item.tags" :key="tag" color="green">{{
-                  tag
-                }}</a-tag>
+                <a-tag
+                  v-for="tag in getSolutionTags(item)"
+                  :key="tag"
+                  color="green"
+                  >{{ tag }}</a-tag
+                >
                 <span style="margin-left: 8px; color: #888">
                   {{ moment(item.createTime).format("YYYY-MM-DD HH:mm") }}
                 </span>
@@ -42,7 +45,8 @@
                     overflow: hidden;
                     text-overflow: ellipsis;
                     white-space: nowrap;
-                    max-width: 500px;
+                    width: 100%;
+                    max-width: none;
                   "
                 >
                   {{
@@ -61,11 +65,12 @@
     <!-- Add Solution Modal -->
     <a-modal
       v-model:visible="showAddModal"
-      title="发布题解"
-      @ok="handleAddSolution"
+      :title="isEditSolutionMode ? '编辑题解' : '发布题解'"
+      @ok="handleSubmitSolution"
       fullscreen
+      class="solution-modal"
     >
-      <a-form :model="addForm">
+      <a-form :model="addForm" layout="vertical" class="solution-form">
         <a-form-item field="title" label="标题">
           <a-input v-model="addForm.title" placeholder="请输入标题" />
         </a-form-item>
@@ -76,10 +81,13 @@
           />
         </a-form-item>
         <a-form-item field="content" label="内容">
-          <MdEditor
-            :value="addForm.content"
-            :handle-change="(v) => (addForm.content = v)"
-          />
+          <div class="solution-editor">
+            <MdEditor
+              class="solution-md-editor"
+              :value="addForm.content"
+              :handle-change="(v) => (addForm.content = v)"
+            />
+          </div>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -90,6 +98,7 @@
       v-model:visible="showDetailDrawer"
       title="题解详情"
       :footer="false"
+      class="solution-drawer"
     >
       <div v-if="currentSolution">
         <h2>{{ currentSolution.title }}</h2>
@@ -112,8 +121,20 @@
             moment(currentSolution.createTime).format("YYYY-MM-DD HH:mm")
           }}</span>
         </div>
+        <a-space v-if="canManageCurrentSolution" style="margin-bottom: 16px">
+          <a-button type="primary" @click="goEditSolution">编辑题解</a-button>
+          <a-popconfirm content="确定删除这篇题解吗？" @ok="deleteSolution">
+            <a-button
+              type="outline"
+              status="danger"
+              :loading="deletingSolution"
+            >
+              删除题解
+            </a-button>
+          </a-popconfirm>
+        </a-space>
         <a-divider />
-        <MdViewer :value="currentSolution.content" />
+        <MdViewer :value="currentSolution.content || ''" />
         <a-divider />
         <div
           style="display: flex; justify-content: center; margin-bottom: 24px"
@@ -187,13 +208,15 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, onMounted, ref, watch } from "vue";
+import { computed, defineProps, onMounted, ref, watch } from "vue";
+import { useStore } from "vuex";
 import { PostControllerService, PostVO } from "../../../generated";
 import MdEditor from "@/components/MdEditor.vue";
 import MdViewer from "@/components/MdViewer.vue";
 import message from "@arco-design/web-vue/es/message";
 import moment from "moment";
 import axios from "axios";
+import ACCESS_ENUM from "@/access/accessEnum";
 import {
   IconHeart,
   IconMessage,
@@ -205,16 +228,38 @@ const props = defineProps<{
   questionId: string;
 }>();
 
-const dataList = ref<PostVO[]>([]);
+type SolutionItem = PostVO & {
+  tagList?: string[];
+  tags?: string[];
+};
+
+const dataList = ref<SolutionItem[]>([]);
 const total = ref(0);
 const showAddModal = ref(false);
 const showDetailDrawer = ref(false);
-const currentSolution = ref<PostVO>();
+const currentSolution = ref<SolutionItem>();
 const commentList = ref([]);
 const newComment = ref("");
+const deletingSolution = ref(false);
+const editingSolutionId = ref<number>();
+
+const store = useStore();
+const loginUser = computed(() => store.state.user.loginUser || {});
+const isEditSolutionMode = computed(() => Boolean(editingSolutionId.value));
+
+const isAdmin = computed(() => loginUser.value?.userRole === ACCESS_ENUM.ADMIN);
+const canManageCurrentSolution = computed(() => {
+  const currentUserId = loginUser.value?.id;
+  const solutionUserId = currentSolution.value?.userId;
+  if (!currentUserId || !solutionUserId) {
+    return false;
+  }
+  return isAdmin.value || String(currentUserId) === String(solutionUserId);
+});
 
 const searchParams = ref({
   questionId: props.questionId,
+  postType: "solution",
   pageSize: 10,
   current: 1,
   sortField: "createTime",
@@ -227,6 +272,23 @@ const addForm = ref({
   tags: [] as string[],
 });
 
+const resetSolutionForm = () => {
+  editingSolutionId.value = undefined;
+  addForm.value = {
+    title: "",
+    content: "",
+    tags: [],
+  };
+};
+
+const getSolutionTags = (solution?: SolutionItem) => {
+  if (!solution) {
+    return [] as string[];
+  }
+  const tags = solution.tagList || solution.tags || [];
+  return Array.isArray(tags) ? tags : [];
+};
+
 const paginationProps = ref({
   pageSize: 10,
   current: 1,
@@ -238,6 +300,7 @@ const loadData = async () => {
   if (!props.questionId) return;
   const res = await PostControllerService.listPostVoByPageUsingPost({
     ...searchParams.value,
+    postType: "solution",
     questionId: parseInt(props.questionId),
     sortField: "create_time",
   });
@@ -254,14 +317,53 @@ const onPageChange = (page: number) => {
   loadData();
 };
 
-const handleAddSolution = async () => {
+const openAddSolutionModal = () => {
+  resetSolutionForm();
+  showAddModal.value = true;
+};
+
+const handleSubmitSolution = async () => {
+  if (!addForm.value.title?.trim() || !addForm.value.content?.trim()) {
+    message.error("请输入标题和内容");
+    return;
+  }
+  if (isEditSolutionMode.value && editingSolutionId.value) {
+    const res = await PostControllerService.editPostUsingPost({
+      id: editingSolutionId.value,
+      title: addForm.value.title,
+      content: addForm.value.content,
+      tags: addForm.value.tags,
+      postType: "solution",
+      questionId: parseInt(props.questionId),
+    });
+    if (res.code === 0) {
+      message.success("题解更新成功");
+      showAddModal.value = false;
+      if (currentSolution.value?.id === editingSolutionId.value) {
+        currentSolution.value = {
+          ...currentSolution.value,
+          title: addForm.value.title,
+          content: addForm.value.content,
+          tagList: addForm.value.tags,
+          tags: addForm.value.tags,
+        };
+      }
+      await loadData();
+      return;
+    }
+    message.error("题解更新失败: " + res.message);
+    return;
+  }
+
   const res = await PostControllerService.addPostUsingPost({
     ...addForm.value,
+    postType: "solution",
     questionId: parseInt(props.questionId),
   });
   if (res.code === 0) {
     message.success("发布成功");
     showAddModal.value = false;
+    resetSolutionForm();
     loadData();
   } else {
     message.error("发布失败: " + res.message);
@@ -272,6 +374,41 @@ const toSolutionDetail = (item: PostVO) => {
   currentSolution.value = item;
   showDetailDrawer.value = true;
   loadComments(item.id);
+};
+
+const goEditSolution = () => {
+  if (!currentSolution.value?.id || !canManageCurrentSolution.value) {
+    return;
+  }
+  editingSolutionId.value = currentSolution.value.id;
+  addForm.value = {
+    title: currentSolution.value.title || "",
+    content: currentSolution.value.content || "",
+    tags: getSolutionTags(currentSolution.value),
+  };
+  showAddModal.value = true;
+};
+
+const deleteSolution = async () => {
+  if (!currentSolution.value?.id) {
+    return;
+  }
+  deletingSolution.value = true;
+  try {
+    const res = await PostControllerService.deletePostUsingPost({
+      id: currentSolution.value.id,
+    });
+    if (res.code === 0) {
+      message.success("题解删除成功");
+      showDetailDrawer.value = false;
+      currentSolution.value = undefined;
+      await loadData();
+    } else {
+      message.error("题解删除失败: " + res.message);
+    }
+  } finally {
+    deletingSolution.value = false;
+  }
 };
 
 const loadComments = async (solutionId: number) => {
@@ -346,12 +483,57 @@ watch(
   }
 );
 
+watch(showAddModal, (visible) => {
+  if (!visible) {
+    resetSolutionForm();
+  }
+});
+
 onMounted(() => {
   loadData();
 });
 </script>
 
 <style scoped>
+.solution-form {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 140px);
+  overflow: hidden;
+}
+
+.solution-form :deep(.arco-form-item) {
+  flex-shrink: 0;
+}
+
+.solution-form :deep(.arco-form-item:last-child) {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.solution-editor {
+  height: 100%;
+  min-height: 0;
+}
+
+.solution-editor :deep(.md-editor) {
+  height: 100%;
+}
+
+.solution-modal :global(.arco-modal-body) {
+  height: calc(100vh - 120px);
+  overflow: hidden;
+}
+
+.solution-modal :global(.arco-modal-content) {
+  height: 100%;
+}
+
+.solution-drawer :global(.arco-drawer-body) {
+  padding-right: 24px;
+}
+
 .action {
   display: inline-block;
   padding: 0 4px;

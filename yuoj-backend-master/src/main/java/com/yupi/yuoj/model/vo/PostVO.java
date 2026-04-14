@@ -4,8 +4,10 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.yupi.yuoj.model.entity.Post;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
 
@@ -16,6 +18,8 @@ import org.springframework.beans.BeanUtils;
 public class PostVO implements Serializable {
 
     private final static Gson GSON = new Gson();
+    private static final String SOLUTION_MARKER = "__solution__";
+    private static final String QUESTION_MARKER_PREFIX = "__question_";
 
     /**
      * id
@@ -108,8 +112,15 @@ public class PostVO implements Serializable {
         }
         PostVO postVO = new PostVO();
         BeanUtils.copyProperties(post, postVO);
-        postVO.setTags(GSON.fromJson(post.getTags(), new TypeToken<List<String>>() {
-        }.getType()));
+        List<String> tags = GSON.fromJson(post.getTags(), new TypeToken<List<String>>() {
+        }.getType());
+        if (tags == null) {
+            tags = new ArrayList<>();
+        }
+        List<String> finalTags = tags.stream()
+                .filter(tag -> tag != null && !SOLUTION_MARKER.equals(tag) && !tag.startsWith(QUESTION_MARKER_PREFIX))
+                .collect(Collectors.toList());
+        postVO.setTags(finalTags);
         return postVO;
     }
 }
