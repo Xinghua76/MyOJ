@@ -177,7 +177,8 @@ public class PostController {
         List<String> tags = postEditRequest.getTags();
         if (tags != null || StringUtils.isNotBlank(postEditRequest.getPostType())
                 || postEditRequest.getQuestionId() != null) {
-            List<String> finalTags = composeTags(tags, postEditRequest.getPostType(), postEditRequest.getQuestionId(), oldPost);
+            List<String> finalTags = composeTags(tags, postEditRequest.getPostType(), postEditRequest.getQuestionId(),
+                    oldPost);
             post.setTags(GSON.toJson(finalTags));
         }
         // 参数校验
