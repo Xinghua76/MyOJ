@@ -21,16 +21,14 @@ import com.yupi.yuoj.service.ContestQuestionService;
 import com.yupi.yuoj.service.ContestService;
 import com.yupi.yuoj.service.ContestSignupService;
 import com.yupi.yuoj.service.UserService;
+import java.util.Date;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Date;
 
 /**
  * Contest question endpoints
@@ -63,12 +61,10 @@ public class ContestQuestionController {
         if (request.getOrderNo() != null && request.getOrderNo() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "orderNo must be positive");
         }
-        // prevent duplicate question in same contest
         ContestQuestionQueryRequest queryRequest = new ContestQuestionQueryRequest();
         queryRequest.setContestId(request.getContestId());
         queryRequest.setQuestionId(request.getQuestionId());
-        ContestQuestion existed = contestQuestionService.getOne(
-                contestQuestionService.getQueryWrapper(queryRequest));
+        ContestQuestion existed = contestQuestionService.getOne(contestQuestionService.getQueryWrapper(queryRequest));
         if (existed != null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "question already added");
         }
@@ -103,30 +99,31 @@ public class ContestQuestionController {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         long contestId = request.getContestId();
-        User loginUser = userService.getLoginUser(httpRequest);
-        // 如果不是管理员，需要校验权限
-        if (!userService.isAdmin(loginUser)) {
-            Contest contest = contestService.getById(contestId);
-            if (contest == null) {
-                throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "contest not found");
-            }
-            Date now = new Date();
-            // 比赛未开始，禁止查看题目
-            if (contest.getStartTime() != null && now.before(contest.getStartTime())) {
+        Contest contest = contestService.getById(contestId);
+        if (contest == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "contest not found");
+        }
+
+        User loginUser = userService.getLoginUserPermitNull(httpRequest);
+        boolean isAdmin = loginUser != null && userService.isAdmin(loginUser);
+        Date now = new Date();
+        boolean contestStarted = contest.getStartTime() == null || !now.before(contest.getStartTime());
+        boolean contestEnded = contest.getEndTime() != null && now.after(contest.getEndTime());
+
+        if (!isAdmin) {
+            if (!contestStarted) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "contest not started");
             }
-            // 校验是否报名
-            QueryWrapper<ContestSignup> signupQuery = new QueryWrapper<>();
-            signupQuery.eq("contest_id", contestId);
-            signupQuery.eq("user_id", loginUser.getId());
-            signupQuery.eq("status", 1);
-            long count = contestSignupService.count(signupQuery);
-            if (count == 0) {
-                // 如果没报名，但是比赛已经结束了，可以查看吗？通常可以。
-                // 如果比赛已结束，允许查看。
-                // 如果比赛未结束，必须报名才能查看。
-                if (contest.getEndTime() == null || now.before(contest.getEndTime())) {
-                    // 比赛未结束且未报名
+            if (!contestEnded) {
+                if (loginUser == null) {
+                    throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+                }
+                QueryWrapper<ContestSignup> signupQuery = new QueryWrapper<>();
+                signupQuery.eq("contest_id", contestId);
+                signupQuery.eq("user_id", loginUser.getId());
+                signupQuery.eq("status", 1);
+                long count = contestSignupService.count(signupQuery);
+                if (count == 0) {
                     throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "not signed up");
                 }
             }

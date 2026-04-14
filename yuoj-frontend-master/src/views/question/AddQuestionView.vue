@@ -243,7 +243,7 @@ const doSubmit = async () => {
     if (res.code === 0) {
       message.success("更新成功");
       router.push({
-        path: `/view/question/${form.value.id}`,
+        path: "/manage/question",
         replace: true,
       });
     } else {

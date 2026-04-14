@@ -10,7 +10,6 @@
 <script setup lang="ts">
 import { MdEditor } from "md-editor-v3";
 import "md-editor-v3/lib/style.css";
-import { defineProps, withDefaults } from "vue";
 import { FileControllerService } from "../../generated";
 import message from "@arco-design/web-vue/es/message";
 
@@ -27,7 +26,7 @@ interface Props {
 /**
  * 给组件指定初始值
  */
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   value: () => "",
   mode: () => "split",
   handleChange: (v: string) => {

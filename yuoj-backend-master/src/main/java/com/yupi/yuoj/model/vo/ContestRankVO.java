@@ -12,6 +12,8 @@ import java.io.Serializable;
 @Data
 public class ContestRankVO implements Serializable {
 
+    private Integer rank;
+
     private Long id;
 
     private Long contestId;

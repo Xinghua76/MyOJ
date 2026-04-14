@@ -19,8 +19,12 @@
           <a-space>
             <a-tag
               v-if="record.judgeInfo?.message"
-              :color="record.judgeInfo.message === 'Accepted' ? 'green' : 'red'"
-              >{{ record.judgeInfo.message }}</a-tag
+              :color="
+                isAcceptedJudgeMessage(record.judgeInfo.message)
+                  ? 'green'
+                  : 'red'
+              "
+              >{{ localizeJudgeMessage(record.judgeInfo.message) }}</a-tag
             >
             <a-tag v-if="record.judgeInfo?.time" color="cyan"
               >{{ record.judgeInfo.time }} ms</a-tag
@@ -63,6 +67,10 @@ import {
 } from "../../../generated";
 import message from "@arco-design/web-vue/es/message";
 import moment from "moment";
+import {
+  isAcceptedJudgeMessage,
+  localizeJudgeMessage,
+} from "@/utils/judgeMessage";
 
 const store = useStore();
 const router = useRouter();

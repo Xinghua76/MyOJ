@@ -45,8 +45,8 @@ import org.apache.commons.lang3.StringUtils;
 /**
  * 题目接口
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
+ * a
+ * a
  */
 @RestController
 @RequestMapping("/question")
@@ -469,16 +469,22 @@ public class QuestionController {
      * @param request
      * @return
      */
-    @PostMapping("/question_submit/list/page")
+@PostMapping("/question_submit/list/page")
     public BaseResponse<Page<QuestionSubmitVO>> listQuestionSubmitByPage(
             @RequestBody QuestionSubmitQueryRequest questionSubmitQueryRequest,
             HttpServletRequest request) {
+        if (questionSubmitQueryRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        final User loginUser = userService.getLoginUser(request);
+        if (!userService.isAdmin(loginUser)) {
+            questionSubmitQueryRequest.setUserId(loginUser.getId());
+        }
         long current = questionSubmitQueryRequest.getCurrent();
         long size = questionSubmitQueryRequest.getPageSize();
         // 从数据库中查询原始的题目提交分页信息
         Page<QuestionSubmit> questionSubmitPage = questionSubmitService.page(new Page<>(current, size),
                 questionSubmitService.getQueryWrapper(questionSubmitQueryRequest));
-        final User loginUser = userService.getLoginUser(request);
         // 返回脱敏信息
         return ResultUtils.success(questionSubmitService.getQuestionSubmitVOPage(questionSubmitPage, loginUser));
     }

@@ -134,16 +134,20 @@
                   </a-tag>
                   <template v-else-if="submitResult.status === 2">
                     <a-tag
-                      v-if="submitResult.judgeInfo?.message === 'Accepted'"
+                      v-if="
+                        isAcceptedJudgeMessage(submitResult.judgeInfo?.message)
+                      "
                       color="green"
                       size="large"
                     >
                       <template #icon><icon-check-circle-fill /></template>
-                      通过 (Accepted)
+                      通过
                     </a-tag>
                     <a-tag v-else color="red" size="large">
                       <template #icon><icon-close-circle-fill /></template>
-                      {{ submitResult.judgeInfo?.message }}
+                      {{
+                        localizeJudgeMessage(submitResult.judgeInfo?.message)
+                      }}
                     </a-tag>
                   </template>
                   <a-tag
@@ -152,7 +156,9 @@
                     size="large"
                   >
                     <template #icon><icon-close-circle-fill /></template>
-                    失败 ({{ submitResult.judgeInfo?.message }})
+                    失败 ({{
+                      localizeJudgeMessage(submitResult.judgeInfo?.message)
+                    }})
                   </a-tag>
                   <a-tag v-else color="gray" size="large">未知</a-tag>
                 </a-descriptions-item>
@@ -161,13 +167,15 @@
                   <a-alert
                     v-if="submitResult.judgeInfo?.message"
                     :type="
-                      submitResult.judgeInfo?.message === 'Accepted'
+                      isAcceptedJudgeMessage(submitResult.judgeInfo?.message)
                         ? 'success'
                         : 'error'
                     "
                   >
                     <div style="white-space: pre-wrap">
-                      {{ submitResult.judgeInfo?.message }}
+                      {{
+                        localizeJudgeMessage(submitResult.judgeInfo?.message)
+                      }}
                     </div>
                   </a-alert>
                   <span v-else>-</span>
@@ -216,6 +224,10 @@ import {
   IconCode,
 } from "@arco-design/web-vue/es/icon";
 import axios from "axios";
+import {
+  isAcceptedJudgeMessage,
+  localizeJudgeMessage,
+} from "@/utils/judgeMessage";
 
 interface Props {
   id: string;

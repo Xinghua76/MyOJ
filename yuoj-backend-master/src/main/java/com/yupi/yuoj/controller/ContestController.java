@@ -48,6 +48,9 @@ public class ContestController {
         if (request.getStartTime() == null || request.getEndTime() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "开始时间或结束时间不能为空");
         }
+        if (!request.getEndTime().after(request.getStartTime())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "end time must be after start time");
+        }
         User loginUser = userService.getLoginUser(httpRequest);
         Contest contest = new Contest();
         BeanUtils.copyProperties(request, contest);
@@ -75,6 +78,10 @@ public class ContestController {
     public BaseResponse<Boolean> update(@RequestBody ContestUpdateRequest request) {
         if (request == null || request.getId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        if (request.getStartTime() != null && request.getEndTime() != null
+                && !request.getEndTime().after(request.getStartTime())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "end time must be after start time");
         }
         Contest contest = new Contest();
         BeanUtils.copyProperties(request, contest);

@@ -6,6 +6,18 @@
           <a-tag v-for="(tag, index) of post?.tags" :key="index" color="green">
             {{ tag }}
           </a-tag>
+          <a-button v-if="isOwnPost" type="primary" @click="goEditPost">
+            编辑
+          </a-button>
+          <a-popconfirm
+            v-if="isOwnPost"
+            content="确定删除这篇帖子吗？"
+            @ok="doDeletePost"
+          >
+            <a-button type="outline" status="danger" :loading="postDeleting">
+              删除
+            </a-button>
+          </a-popconfirm>
           <a-button type="outline" @click="router.back()">返回</a-button>
         </a-space>
       </template>
@@ -237,6 +249,7 @@ const commentSubmitting = ref(false);
 const commentThumbLoadingMap = ref<Record<number, boolean>>({});
 const commentCollapseMap = ref<Record<number, boolean>>({});
 const commentDeletingMap = ref<Record<number, boolean>>({});
+const postDeleting = ref(false);
 
 const replyParentId = ref<number | undefined>(undefined);
 const replyParentUserName = ref<string>("");
@@ -245,6 +258,14 @@ const loginUser = computed(() => store.state.user.loginUser || {});
 const isLogin = computed(() => Boolean(loginUser.value?.id));
 const loginUserName = computed(() => loginUser.value?.userName || "Guest");
 const loginUserAvatar = computed(() => loginUser.value?.userAvatar || "");
+const isOwnPost = computed(() => {
+  const loginUserId = loginUser.value?.id;
+  const postUserId = post.value?.userId;
+  if (!loginUserId || !postUserId) {
+    return false;
+  }
+  return String(loginUserId) === String(postUserId);
+});
 
 const resolvedPostId = computed<string | undefined>(() => {
   const rawId =
@@ -384,6 +405,33 @@ const loadComments = async () => {
 
 const onCommentPageChange = (page: number) => {
   commentCurrent.value = page;
+};
+
+const goEditPost = () => {
+  if (!post.value?.id) {
+    return;
+  }
+  router.push(`/post/create?id=${post.value.id}`);
+};
+
+const doDeletePost = async () => {
+  if (!post.value?.id) {
+    return;
+  }
+  postDeleting.value = true;
+  try {
+    const res = await PostControllerService.deletePostUsingPost({
+      id: post.value.id,
+    });
+    if (res.code === 0) {
+      message.success("帖子删除成功");
+      router.push("/posts");
+    } else {
+      message.error("帖子删除失败：" + res.message);
+    }
+  } finally {
+    postDeleting.value = false;
+  }
 };
 
 const isCollapsed = (commentId?: number) => {

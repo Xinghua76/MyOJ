@@ -28,32 +28,15 @@ import java.util.HashSet;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
  * Solution service (reusing Post module)
  */
-import org.elasticsearch.index.query.BoolQueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.search.sort.SortBuilder;
-import org.elasticsearch.search.sort.SortBuilders;
-import org.elasticsearch.search.sort.SortOrder;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
-import org.springframework.data.elasticsearch.core.SearchHit;
-import org.springframework.data.elasticsearch.core.SearchHits;
-import org.springframework.data.elasticsearch.core.query.NativeSearchQuery;
-import org.springframework.data.elasticsearch.core.query.NativeSearchQueryBuilder;
-import com.yupi.yuoj.model.dto.post.PostEsDTO;
-import java.util.ArrayList;
-
 @Service
-@Slf4j
 public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements PostService {
 
     @Resource
@@ -97,6 +80,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         String title = postQueryRequest.getTitle();
         String content = postQueryRequest.getContent();
         List<String> tagList = postQueryRequest.getTags();
+        List<String> orTagList = postQueryRequest.getOrTags();
         Long userId = postQueryRequest.getUserId();
         Long notId = postQueryRequest.getNotId();
         // 拼接查询条件
@@ -110,139 +94,30 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 queryWrapper.like("tags", "\"" + tag + "\"");
             }
         }
+        if (CollectionUtils.isNotEmpty(orTagList)) {
+            queryWrapper.and(qw -> {
+                for (int i = 0; i < orTagList.size(); i++) {
+                    String tag = orTagList.get(i);
+                    if (i == 0) {
+                        qw.like("tags", "\"" + tag + "\"");
+                    } else {
+                        qw.or().like("tags", "\"" + tag + "\"");
+                    }
+                }
+            });
+        }
         queryWrapper.ne(ObjectUtils.isNotEmpty(notId), "id", notId);
         queryWrapper.eq(ObjectUtils.isNotEmpty(id), "id", id);
         queryWrapper.eq(ObjectUtils.isNotEmpty(userId), "user_id", userId);
-        queryWrapper.orderBy(SqlUtils.validSortField(sortField), sortOrder.equals(CommonConstant.SORT_ORDER_ASC),
-                sortField);
+        boolean asc = CommonConstant.SORT_ORDER_ASC.equals(sortOrder);
+        queryWrapper.orderBy(SqlUtils.validSortField(sortField), asc, sortField);
         return queryWrapper;
     }
 
-    @Autowired(required = false)
-    private ElasticsearchRestTemplate elasticsearchRestTemplate;
-
     @Override
-    public Page<Post> searchFromEs(PostQueryRequest postQueryRequest) {
-        if (elasticsearchRestTemplate == null) {
-            return this.page(new Page<>(postQueryRequest.getCurrent(), postQueryRequest.getPageSize()),
-                    this.getQueryWrapper(postQueryRequest));
-        }
-        Long id = postQueryRequest.getId();
-        Long notId = postQueryRequest.getNotId();
-        String searchText = postQueryRequest.getSearchText();
-        String title = postQueryRequest.getTitle();
-        String content = postQueryRequest.getContent();
-        List<String> tagList = postQueryRequest.getTags();
-        List<String> orTagList = postQueryRequest.getOrTags();
-        Long userId = postQueryRequest.getUserId();
-        // es 起始页为 0
-        long current = postQueryRequest.getCurrent() - 1;
-        long pageSize = postQueryRequest.getPageSize();
-        String sortField = postQueryRequest.getSortField();
-        String sortOrder = postQueryRequest.getSortOrder();
-        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-        // 过滤
-        if (id != null) {
-            boolQueryBuilder.filter(QueryBuilders.termQuery("id", id));
-        }
-        if (notId != null) {
-            boolQueryBuilder.mustNot(QueryBuilders.termQuery("id", notId));
-        }
-        if (userId != null) {
-            boolQueryBuilder.filter(QueryBuilders.termQuery("userId", userId));
-        }
-        // 必须包含所有标签
-        if (CollectionUtils.isNotEmpty(tagList)) {
-            for (String tag : tagList) {
-                boolQueryBuilder.filter(QueryBuilders.termQuery("tags", tag));
-            }
-        }
-        // 包含任何一个标签即可
-        if (CollectionUtils.isNotEmpty(orTagList)) {
-            BoolQueryBuilder orTagBoolQueryBuilder = QueryBuilders.boolQuery();
-            for (String tag : orTagList) {
-                orTagBoolQueryBuilder.should(QueryBuilders.termQuery("tags", tag));
-            }
-            orTagBoolQueryBuilder.minimumShouldMatch(1);
-            boolQueryBuilder.filter(orTagBoolQueryBuilder);
-        }
-        // 按关键词检索
-        if (StringUtils.isNotBlank(searchText)) {
-            boolQueryBuilder.should(QueryBuilders.matchQuery("title", searchText));
-            boolQueryBuilder.should(QueryBuilders.matchQuery("tags", searchText));
-            boolQueryBuilder.should(QueryBuilders.matchQuery("content", searchText));
-            boolQueryBuilder.minimumShouldMatch(1);
-        }
-        // 按标题检索
-        if (StringUtils.isNotBlank(title)) {
-            boolQueryBuilder.should(QueryBuilders.matchQuery("title", title));
-            boolQueryBuilder.minimumShouldMatch(1);
-        }
-        // 按内容检索
-        if (StringUtils.isNotBlank(content)) {
-            boolQueryBuilder.should(QueryBuilders.matchQuery("content", content));
-            boolQueryBuilder.minimumShouldMatch(1);
-        }
-        // 排序
-        SortBuilder<?> sortBuilder = SortBuilders.scoreSort();
-        if (StringUtils.isNotBlank(sortField)) {
-            sortBuilder = SortBuilders.fieldSort(sortField);
-            if (CommonConstant.SORT_ORDER_ASC.equals(sortOrder)) {
-                sortBuilder.order(SortOrder.ASC);
-            } else {
-                sortBuilder.order(SortOrder.DESC);
-            }
-        }
-        // 分页
-        PageRequest pageRequest = PageRequest.of((int) current, (int) pageSize);
-        // 构造查询
-        NativeSearchQuery searchQuery = new NativeSearchQueryBuilder().withQuery(boolQueryBuilder)
-                .withPageable(pageRequest).withSorts(sortBuilder).build();
-        SearchHits<PostEsDTO> searchHits;
-        try {
-            searchHits = elasticsearchRestTemplate.search(searchQuery, PostEsDTO.class);
-        } catch (Exception e) {
-            log.warn("es search failed, fallback to db, reason: {}", e.getMessage());
-            return this.page(new Page<>(postQueryRequest.getCurrent(), postQueryRequest.getPageSize()),
-                    this.getQueryWrapper(postQueryRequest));
-        }
-
-        boolean hasSearchCondition = StringUtils.isNotBlank(searchText)
-                || StringUtils.isNotBlank(title)
-                || StringUtils.isNotBlank(content)
-                || CollectionUtils.isNotEmpty(tagList)
-                || CollectionUtils.isNotEmpty(orTagList)
-                || userId != null
-                || id != null
-                || notId != null;
-        if (hasSearchCondition && searchHits.getTotalHits() == 0) {
-            return this.page(new Page<>(postQueryRequest.getCurrent(), postQueryRequest.getPageSize()),
-                    this.getQueryWrapper(postQueryRequest));
-        }
-        Page<Post> page = new Page<>();
-        page.setTotal(searchHits.getTotalHits());
-        List<Post> resourceList = new ArrayList<>();
-        // 查出结果后，从 db 获取最新动态数据（比如点赞数）
-        if (searchHits.hasSearchHits()) {
-            List<SearchHit<PostEsDTO>> searchHitList = searchHits.getSearchHits();
-            List<Long> postIdList = searchHitList.stream().map(searchHit -> searchHit.getContent().getId())
-                    .collect(Collectors.toList());
-            List<Post> postList = baseMapper.selectBatchIds(postIdList);
-            if (postList != null) {
-                Map<Long, List<Post>> idPostMap = postList.stream().collect(Collectors.groupingBy(Post::getId));
-                postIdList.forEach(postId -> {
-                    if (idPostMap.containsKey(postId)) {
-                        resourceList.add(idPostMap.get(postId).get(0));
-                    } else {
-                        // 从 es 清空 db 已删除的数据
-                        String delete = elasticsearchRestTemplate.delete(String.valueOf(postId), PostEsDTO.class);
-                        log.info("delete post {}", delete);
-                    }
-                });
-            }
-        }
-        page.setRecords(resourceList);
-        return page;
+    public Page<Post> searchPost(PostQueryRequest postQueryRequest) {
+        return this.page(new Page<>(postQueryRequest.getCurrent(), postQueryRequest.getPageSize()),
+                this.getQueryWrapper(postQueryRequest));
     }
 
     @Override

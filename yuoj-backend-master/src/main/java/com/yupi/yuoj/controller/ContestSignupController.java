@@ -111,7 +111,24 @@ public class ContestSignupController {
     }
 
     @PostMapping("/list/page")
-    public BaseResponse<Page<ContestSignup>> listContestSignupByPage(@RequestBody ContestSignupQueryRequest request) {
+    public BaseResponse<Page<ContestSignup>> listContestSignupByPage(@RequestBody ContestSignupQueryRequest request,
+            HttpServletRequest httpRequest) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUserPermitNull(httpRequest);
+        boolean isAdmin = loginUser != null && userService.isAdmin(loginUser);
+        if (!isAdmin) {
+            if (request.getUserId() != null) {
+                if (loginUser == null) {
+                    throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+                }
+                request.setUserId(loginUser.getId());
+            }
+            if (request.getStatus() == null) {
+                request.setStatus(1);
+            }
+        }
         long current = request.getCurrent();
         long size = request.getPageSize();
         Page<ContestSignup> page = contestSignupService.page(new Page<>(current, size),

@@ -148,7 +148,7 @@ public class PostController {
             HttpServletRequest request) {
         long size = postQueryRequest.getPageSize();
         ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
-        Page<Post> postPage = postService.searchFromEs(postQueryRequest);
+        Page<Post> postPage = postService.searchPost(postQueryRequest);
         return ResultUtils.success(postService.getPostVOPage(postPage, request));
     }
 

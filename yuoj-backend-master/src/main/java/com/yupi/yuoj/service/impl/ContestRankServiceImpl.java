@@ -9,17 +9,31 @@ import com.yupi.yuoj.exception.BusinessException;
 import com.yupi.yuoj.judge.codesandbox.model.JudgeInfo;
 import com.yupi.yuoj.mapper.ContestRankMapper;
 import com.yupi.yuoj.model.dto.contest.ContestRankQueryRequest;
-import com.yupi.yuoj.model.entity.*;
+import com.yupi.yuoj.model.entity.Contest;
+import com.yupi.yuoj.model.entity.ContestQuestion;
+import com.yupi.yuoj.model.entity.ContestRank;
+import com.yupi.yuoj.model.entity.ContestSignup;
+import com.yupi.yuoj.model.entity.QuestionSubmit;
+import com.yupi.yuoj.model.entity.User;
 import com.yupi.yuoj.model.enums.QuestionSubmitStatusEnum;
 import com.yupi.yuoj.model.vo.ContestRankVO;
-import com.yupi.yuoj.model.vo.UserVO;
-import com.yupi.yuoj.service.*;
+import com.yupi.yuoj.service.ContestQuestionService;
+import com.yupi.yuoj.service.ContestRankService;
+import com.yupi.yuoj.service.ContestService;
+import com.yupi.yuoj.service.ContestSignupService;
+import com.yupi.yuoj.service.QuestionSubmitService;
+import com.yupi.yuoj.service.UserService;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import javax.annotation.Resource;
 import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.stereotype.Service;
-
-import javax.annotation.Resource;
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Contest rank service
@@ -28,7 +42,7 @@ import java.util.stream.Collectors;
 public class ContestRankServiceImpl extends ServiceImpl<ContestRankMapper, ContestRank>
         implements ContestRankService {
 
-    private final static Gson GSON = new Gson();
+    private static final Gson GSON = new Gson();
 
     @Resource
     private UserService userService;
@@ -41,6 +55,9 @@ public class ContestRankServiceImpl extends ServiceImpl<ContestRankMapper, Conte
 
     @Resource
     private ContestService contestService;
+
+    @Resource
+    private ContestSignupService contestSignupService;
 
     @Override
     public QueryWrapper<ContestRank> getQueryWrapper(ContestRankQueryRequest request) {
@@ -65,147 +82,154 @@ public class ContestRankServiceImpl extends ServiceImpl<ContestRankMapper, Conte
         if (contest == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
         }
+
         Date startTime = contest.getStartTime();
         if (startTime == null) {
-            // If no start time, assume 0 penalty for time? Or just use submit time?
-            // Usually contests have start time.
             startTime = new Date(0);
         }
 
-        // 1. Get all submissions for this contest
-        QueryWrapper<QuestionSubmit> qQuery = new QueryWrapper<>();
-        qQuery.eq("contest_id", contestId);
-        // Only consider valid submissions? Usually we count all for penalty
-        // calculation.
-        List<QuestionSubmit> submissions = questionSubmitService.list(qQuery);
+        QueryWrapper<ContestSignup> signupQuery = new QueryWrapper<>();
+        signupQuery.eq("contest_id", contestId);
+        signupQuery.eq("status", 1);
+        List<ContestSignup> activeSignups = contestSignupService.list(signupQuery);
 
-        // 2. Get all questions in contest (to know scores)
-        QueryWrapper<ContestQuestion> cqQuery = new QueryWrapper<>();
-        cqQuery.eq("contest_id", contestId);
-        List<ContestQuestion> contestQuestions = contestQuestionService.list(cqQuery);
+        QueryWrapper<QuestionSubmit> submitQuery = new QueryWrapper<>();
+        submitQuery.eq("contest_id", contestId);
+        List<QuestionSubmit> submissions = questionSubmitService.list(submitQuery);
+
+        QueryWrapper<ContestQuestion> contestQuestionQuery = new QueryWrapper<>();
+        contestQuestionQuery.eq("contest_id", contestId);
+        List<ContestQuestion> contestQuestions = contestQuestionService.list(contestQuestionQuery);
         Map<Long, Integer> questionScoreMap = contestQuestions.stream()
                 .collect(Collectors.toMap(ContestQuestion::getQuestionId,
-                        cq -> cq.getScore() == null ? 0 : cq.getScore(), (k1, k2) -> k1));
+                        question -> question.getScore() == null ? 0 : question.getScore(), (left, right) -> left));
 
-        // 3. Calculate Rank
-        // Map<UserId, RankInfo>
         Map<Long, ContestRankVO> rankMap = new HashMap<>();
+        for (ContestSignup signup : activeSignups) {
+            rankMap.put(signup.getUserId(), initRankVO(contestId, signup.getUserId()));
+        }
 
-        // Group submissions by user
         Map<Long, List<QuestionSubmit>> userSubmissions = submissions.stream()
                 .collect(Collectors.groupingBy(QuestionSubmit::getUserId));
 
         for (Map.Entry<Long, List<QuestionSubmit>> entry : userSubmissions.entrySet()) {
             Long userId = entry.getKey();
-            List<QuestionSubmit> userSubmitList = entry.getValue();
-
-            ContestRankVO rankVO = new ContestRankVO();
-            rankVO.setUserId(userId);
-            rankVO.setContestId(contestId);
-            rankVO.setSolvedCount(0);
-            rankVO.setTotalScore(0);
-            rankVO.setPenalty(0);
-
-            // Group by question
-            Map<Long, List<QuestionSubmit>> questionSubmitMap = userSubmitList.stream()
+            ContestRankVO rankVO = rankMap.computeIfAbsent(userId, key -> initRankVO(contestId, key));
+            Map<Long, List<QuestionSubmit>> questionSubmitMap = entry.getValue().stream()
                     .collect(Collectors.groupingBy(QuestionSubmit::getQuestionId));
 
-            for (Map.Entry<Long, List<QuestionSubmit>> qEntry : questionSubmitMap.entrySet()) {
-                Long questionId = qEntry.getKey();
-                List<QuestionSubmit> qSubmits = qEntry.getValue();
+            for (Map.Entry<Long, List<QuestionSubmit>> questionEntry : questionSubmitMap.entrySet()) {
+                Long questionId = questionEntry.getKey();
+                List<QuestionSubmit> questionSubmits = questionEntry.getValue();
+                questionSubmits.sort(
+                        Comparator.comparing(submit -> submit.getSubmitTime() == null ? new Date(0) : submit.getSubmitTime()));
 
-                // Sort by time
-                qSubmits.sort(
-                        Comparator.comparing(qs -> qs.getSubmitTime() == null ? new Date(0) : qs.getSubmitTime()));
-
-                boolean isSolved = false;
                 int wrongCount = 0;
-                long solvedTime = 0;
-
-                for (QuestionSubmit qs : qSubmits) {
-                    if (qs.getStatus().equals(QuestionSubmitStatusEnum.SUCCEED.getValue())) {
-                        String judgeInfoStr = qs.getJudgeInfo();
-                        try {
-                            JudgeInfo judgeInfo = GSON.fromJson(judgeInfoStr, JudgeInfo.class);
-                            if (judgeInfo != null && "Accepted".equals(judgeInfo.getMessage())) {
-                                isSolved = true;
-                                long submitTime = qs.getSubmitTime() == null ? 0 : qs.getSubmitTime().getTime();
-                                solvedTime = submitTime - startTime.getTime();
-                                if (solvedTime < 0)
-                                    solvedTime = 0;
-                                break; // First AC counts
-                            } else {
-                                wrongCount++;
-                            }
-                        } catch (Exception e) {
-                            // ignore parse error
-                            wrongCount++;
-                        }
-                    } else {
-                        // Failed or Waiting
-                        // If Failed (system error), maybe ignore?
-                        // If Running/Waiting, ignore.
-                        if (qs.getStatus().equals(QuestionSubmitStatusEnum.FAILED.getValue())) {
-                            // System error, ignore? Or wrong answer?
-                            // Usually system error is ignored.
-                            // But let's check judgeInfo if available.
-                            // For simplicity: if status is 3 (FAILED) it might be WA if we mapped it so.
-                            // But usually WA is SUCCEED status with WA message.
-                            // Let's assume only non-Accepted in SUCCEED status counts as Wrong.
-                        }
+                Long solvedAtSeconds = null;
+                for (QuestionSubmit submit : questionSubmits) {
+                    if (QuestionSubmitStatusEnum.WAITING.getValue().equals(submit.getStatus())
+                            || QuestionSubmitStatusEnum.RUNNING.getValue().equals(submit.getStatus())) {
+                        continue;
+                    }
+                    if (isAccepted(submit)) {
+                        long submitTime = submit.getSubmitTime() == null ? 0 : submit.getSubmitTime().getTime();
+                        long solvedTime = Math.max(0, submitTime - startTime.getTime());
+                        solvedAtSeconds = solvedTime / 1000;
+                        break;
+                    }
+                    if (isPenaltySubmission(submit)) {
+                        wrongCount++;
                     }
                 }
 
-                if (isSolved) {
+                if (solvedAtSeconds != null) {
                     rankVO.setSolvedCount(rankVO.getSolvedCount() + 1);
                     rankVO.setTotalScore(rankVO.getTotalScore() + questionScoreMap.getOrDefault(questionId, 100));
-                    // Penalty: Time (in minutes usually, here ms) + Wrong * 20 mins
-                    // Let's use seconds or minutes? Prompt says "Penalty". Usually minutes or
-                    // seconds.
-                    // Let's use seconds for precision.
-                    long penaltySeconds = solvedTime / 1000 + wrongCount * 20 * 60;
-                    rankVO.setPenalty(rankVO.getPenalty() + (int) penaltySeconds);
+                    long penalty = solvedAtSeconds + wrongCount * 20L * 60;
+                    rankVO.setPenalty(rankVO.getPenalty() + (int) penalty);
                 }
             }
-            rankMap.put(userId, rankVO);
         }
 
         List<ContestRankVO> rankList = new ArrayList<>(rankMap.values());
-
-        // Sort: Solved Desc, Penalty Asc
-        rankList.sort((a, b) -> {
-            if (!a.getSolvedCount().equals(b.getSolvedCount())) {
-                return b.getSolvedCount() - a.getSolvedCount();
+        rankList.sort((left, right) -> {
+            if (!left.getTotalScore().equals(right.getTotalScore())) {
+                return right.getTotalScore() - left.getTotalScore();
             }
-            return a.getPenalty() - b.getPenalty();
+            if (!left.getSolvedCount().equals(right.getSolvedCount())) {
+                return right.getSolvedCount() - left.getSolvedCount();
+            }
+            if (!left.getPenalty().equals(right.getPenalty())) {
+                return left.getPenalty() - right.getPenalty();
+            }
+            return Long.compare(left.getUserId(), right.getUserId());
         });
 
-        // Pagination
+        for (int i = 0; i < rankList.size(); i++) {
+            rankList.get(i).setRank(i + 1);
+        }
+
         long current = request.getCurrent();
         long size = request.getPageSize();
         long total = rankList.size();
-
         List<ContestRankVO> pagedList = rankList.stream()
                 .skip((current - 1) * size)
                 .limit(size)
                 .collect(Collectors.toList());
 
-        // Fill User Info
-        Set<Long> userIds = pagedList.stream().map(ContestRankVO::getUserId).collect(Collectors.toSet());
-        if (!userIds.isEmpty()) {
-            Map<Long, List<User>> userMap = userService.listByIds(userIds).stream()
-                    .collect(Collectors.groupingBy(User::getId));
-
-            for (ContestRankVO vo : pagedList) {
-                Long uid = vo.getUserId();
-                if (userMap.containsKey(uid)) {
-                    vo.setUserVO(userService.getUserVO(userMap.get(uid).get(0)));
-                }
-            }
-        }
+        fillUserInfo(pagedList);
 
         Page<ContestRankVO> resultPage = new Page<>(current, size, total);
         resultPage.setRecords(pagedList);
         return resultPage;
+    }
+
+    private ContestRankVO initRankVO(Long contestId, Long userId) {
+        ContestRankVO rankVO = new ContestRankVO();
+        rankVO.setContestId(contestId);
+        rankVO.setUserId(userId);
+        rankVO.setSolvedCount(0);
+        rankVO.setTotalScore(0);
+        rankVO.setPenalty(0);
+        return rankVO;
+    }
+
+    private boolean isAccepted(QuestionSubmit submit) {
+        if (!QuestionSubmitStatusEnum.SUCCEED.getValue().equals(submit.getStatus())) {
+            return false;
+        }
+        try {
+            JudgeInfo judgeInfo = GSON.fromJson(submit.getJudgeInfo(), JudgeInfo.class);
+            return judgeInfo != null && "Accepted".equals(judgeInfo.getMessage());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean isPenaltySubmission(QuestionSubmit submit) {
+        if (!QuestionSubmitStatusEnum.SUCCEED.getValue().equals(submit.getStatus())) {
+            return false;
+        }
+        try {
+            JudgeInfo judgeInfo = GSON.fromJson(submit.getJudgeInfo(), JudgeInfo.class);
+            return judgeInfo == null || !"Accepted".equals(judgeInfo.getMessage());
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private void fillUserInfo(List<ContestRankVO> rankList) {
+        Set<Long> userIds = rankList.stream().map(ContestRankVO::getUserId).collect(Collectors.toSet());
+        if (userIds.isEmpty()) {
+            return;
+        }
+        Map<Long, List<User>> userMap = userService.listByIds(userIds).stream()
+                .collect(Collectors.groupingBy(User::getId));
+        for (ContestRankVO rankVO : rankList) {
+            List<User> users = userMap.get(rankVO.getUserId());
+            if (users != null && !users.isEmpty()) {
+                rankVO.setUserVO(userService.getUserVO(users.get(0)));
+            }
+        }
     }
 }

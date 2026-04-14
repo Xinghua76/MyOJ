@@ -86,7 +86,6 @@ export { PostFavourControllerService } from "./services/PostFavourControllerServ
 export { PostThumbControllerService } from "./services/PostThumbControllerService";
 export { QuestionControllerService } from "./services/QuestionControllerService";
 export { UserControllerService } from "./services/UserControllerService";
-export { WxMpControllerService } from "./services/WxMpControllerService";
 export { ContestControllerService } from "./services/ContestControllerService";
 export { ContestQuestionControllerService } from "./services/ContestQuestionControllerService";
 export { ContestRankControllerService } from "./services/ContestRankControllerService";

@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <div id="createPostView">
-    <a-card title="创建帖子">
+    <a-card :title="isEditMode ? '编辑帖子' : '创建帖子'">
       <a-form ref="formRef" :model="form" @submit="handleSubmit">
         <a-form-item
           field="title"
@@ -28,15 +28,17 @@
             type="primary"
             @click="handleSubmit"
             style="min-width: 150px"
-            >发布</a-button
           >
+            {{ isEditMode ? "保存" : "发布" }}
+          </a-button>
           <a-button
             type="outline"
             status="danger"
             style="min-width: 150px; margin-left: 20px"
             @click="router.back()"
-            >取消</a-button
           >
+            取消
+          </a-button>
         </a-form-item>
       </a-form>
     </a-card>
@@ -44,12 +46,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
-import { useRouter } from "vue-router";
-import { PostAddRequest, PostControllerService } from "../../../generated";
+import { computed, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import {
+  PostAddRequest,
+  PostControllerService,
+  PostEditRequest,
+} from "../../../generated";
 import message from "@arco-design/web-vue/es/message";
 import MdEditor from "@/components/MdEditor.vue";
 
+const route = useRoute();
 const router = useRouter();
 
 const form = ref<PostAddRequest>({
@@ -57,6 +64,9 @@ const form = ref<PostAddRequest>({
   content: "",
   tags: [],
 });
+const editPostId = ref<string>();
+
+const isEditMode = computed(() => Boolean(editPostId.value));
 
 const onContentChange = (v: string) => {
   form.value.content = v;
@@ -64,11 +74,29 @@ const onContentChange = (v: string) => {
 
 const formRef = ref();
 
+const loadPostForEdit = async () => {
+  const rawId = String(route.query.id || "").trim();
+  if (!/^\d+$/.test(rawId)) {
+    return;
+  }
+  editPostId.value = rawId;
+  const res = await PostControllerService.getPostVoByIdUsingGet(
+    editPostId.value as unknown as number
+  );
+  if (res.code !== 0 || !res.data) {
+    message.error("帖子加载失败：" + res.message);
+    return;
+  }
+  const data = res.data as Record<string, unknown>;
+  const tags = (data.tags as string[]) || (data.tagList as string[]) || [];
+  form.value = {
+    title: (data.title as string) || "",
+    content: (data.content as string) || "",
+    tags: Array.isArray(tags) ? tags : [],
+  };
+};
+
 const handleSubmit = async () => {
-  // 手动触发校验
-  // validate 方法返回 undefined 表示校验通过，返回错误对象表示失败（Arco Design Vue 2.x）
-  // 或者 validate((errors) => {})
-  // 查阅文档：validate() returns Promise<Record<string, ValidatedError> | undefined>
   const errors = await formRef.value?.validate();
   if (errors) {
     return;
@@ -77,14 +105,36 @@ const handleSubmit = async () => {
     message.error("请填写标题和内容");
     return;
   }
-  const res = await PostControllerService.addPostUsingPost(form.value);
-  if (res.code === 0) {
+
+  if (isEditMode.value && editPostId.value) {
+    const editPayload: PostEditRequest = {
+      id: editPostId.value as unknown as number,
+      title: form.value.title,
+      content: form.value.content,
+      tags: form.value.tags,
+    };
+    const editRes = await PostControllerService.editPostUsingPost(editPayload);
+    if (editRes.code === 0) {
+      message.success("保存成功");
+      router.push(`/post/view/${editPostId.value}`);
+    } else {
+      message.error("保存失败：" + editRes.message);
+    }
+    return;
+  }
+
+  const addRes = await PostControllerService.addPostUsingPost(form.value);
+  if (addRes.code === 0) {
     message.success("发布成功");
-    router.push(`/post/view/${res.data}`);
+    router.push(`/post/view/${addRes.data}`);
   } else {
-    message.error("发布失败，" + res.message);
+    message.error("发布失败：" + addRes.message);
   }
 };
+
+onMounted(() => {
+  loadPostForEdit();
+});
 </script>
 
 <style scoped>
