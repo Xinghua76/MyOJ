@@ -145,3 +145,15 @@ fabric.properties
 # Android studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
 
+### Local config / secrets ###
+.env
+.env.*
+!.env.example
+src/main/resources/application-local.yml
+src/main/resources/application.yml
+src/main/resources/application-dev.yml
+src/main/resources/application-test.yml
+src/main/resources/application-prod.yml
+src/main/resources/application-worker.yml
+src/main/resources/application-private.yml
+
