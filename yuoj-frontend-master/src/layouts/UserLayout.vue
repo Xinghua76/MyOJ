@@ -4,13 +4,13 @@
       <a-layout-header class="header">
         <a-space>
           <img src="../assets/oj-logo.svg" class="logo" />
-          <div>MY OJ</div>
+          <div>CodeArena</div>
         </a-space>
       </a-layout-header>
       <a-layout-content class="content">
         <router-view />
       </a-layout-content>
-      <a-layout-footer class="footer"> MY OJ </a-layout-footer>
+      <a-layout-footer class="footer"> CodeArena </a-layout-footer>
     </a-layout>
   </div>
 </template>

@@ -17,6 +17,7 @@ import FavourView from "@/views/user/FavourView.vue";
 import ManageUserView from "@/views/admin/ManageUserView.vue";
 import ManagePostView from "@/views/admin/ManagePostView.vue";
 import PostDetailView from "@/views/post/PostDetailView.vue";
+import HomeView from "@/views/HomeView.vue";
 
 export const routes: Array<RouteRecordRaw> = [
   {
@@ -143,7 +144,7 @@ export const routes: Array<RouteRecordRaw> = [
     name: "创建题目",
     component: AddQuestionView,
     meta: {
-      access: ACCESS_ENUM.USER,
+      access: ACCESS_ENUM.ADMIN,
     },
   },
   {
@@ -151,7 +152,7 @@ export const routes: Array<RouteRecordRaw> = [
     name: "更新题目",
     component: AddQuestionView,
     meta: {
-      access: ACCESS_ENUM.USER,
+      access: ACCESS_ENUM.ADMIN,
       hideInMenu: true,
     },
   },
@@ -206,7 +207,7 @@ export const routes: Array<RouteRecordRaw> = [
   {
     path: "/",
     name: "主页",
-    component: QuestionsView,
+    component: HomeView,
   },
   {
     path: "/noAuth",

@@ -1,33 +1,5 @@
 <template>
   <div id="questionsView">
-    <!-- 公告栏 -->
-    <a-card class="notice-card" v-if="noticeList && noticeList.length > 0">
-      <template #title>
-        <div style="display: flex; align-items: center">
-          <icon-sound-fill style="margin-right: 8px; color: #165dff" />
-          <span>系统公告</span>
-        </div>
-      </template>
-      <a-carousel
-        auto-play
-        indicator-type="dot"
-        show-arrow="hover"
-        style="height: 200px; border-radius: 4px; overflow: hidden"
-        animation-name="fade"
-      >
-        <a-carousel-item v-for="notice in noticeList" :key="notice.id">
-          <div class="notice-content">
-            <h3 class="notice-title">{{ notice.title }}</h3>
-            <p class="notice-text">{{ notice.content }}</p>
-            <div class="notice-time">
-              发布于：{{
-                moment(notice.publishTime).format("YYYY-MM-DD HH:mm")
-              }}
-            </div>
-          </div>
-        </a-carousel-item>
-      </a-carousel>
-    </a-card>
     <a-divider size="0" />
 
     <a-form :model="searchParams" layout="inline">
@@ -60,6 +32,11 @@
       }"
       @page-change="onPageChange"
     >
+      <template #difficulty="{ record }">
+        <a-tag v-if="record.difficulty === 1" color="green"> 简单 </a-tag>
+        <a-tag v-else-if="record.difficulty === 2" color="orange"> 中等 </a-tag>
+        <a-tag v-else-if="record.difficulty === 3" color="red"> 困难 </a-tag>
+      </template>
       <template #tags="{ record }">
         <a-space wrap>
           <a-tag v-for="(tag, index) of record.tags" :key="index" color="green">
@@ -97,13 +74,11 @@ import {
   Question,
   QuestionControllerService,
   QuestionQueryRequest,
-  NoticeControllerService,
 } from "../../../generated";
 import message from "@arco-design/web-vue/es/message";
 import * as querystring from "querystring";
 import { useRouter } from "vue-router";
 import moment from "moment";
-import { IconSoundFill } from "@arco-design/web-vue/es/icon";
 
 const TAG_OPTIONS = [
   { label: "数组", value: "数组" },
@@ -127,7 +102,6 @@ const tableRef = ref();
 
 const dataList = ref([]);
 const total = ref(0);
-const noticeList = ref([]);
 const searchParams = ref<QuestionQueryRequest>({
   title: "",
   keyword: "",
@@ -137,22 +111,6 @@ const searchParams = ref<QuestionQueryRequest>({
 });
 
 const loadData = async () => {
-  // 加载公告（只获取已发布的，这里复用 listPage 接口，status=1 为已发布）
-  // 注意：后端 NoticeController.listPage 可能没有自动过滤 status，需要在请求参数中指定或者在后端处理
-  // 这里假设前端传参过滤，或者后端默认不过滤，需要手动筛选
-  const noticeRes = await NoticeControllerService.listPageUsingPost({
-    pageSize: 5,
-    current: 1,
-    // 假设后端支持 status 查询，如果不支持可能需要后端改动
-    // 根据之前的代码，NoticeQueryRequest 应该包含 status
-  });
-  if (noticeRes.code === 0) {
-    // 简单过滤一下，确保只显示已发布的
-    noticeList.value = noticeRes.data.records.filter(
-      (item: any) => item.status === 1
-    );
-  }
-
   const res = await QuestionControllerService.listQuestionVoByPageUsingPost(
     searchParams.value
   );
@@ -180,6 +138,11 @@ const columns = [
   {
     title: "题目名称",
     dataIndex: "title",
+  },
+  {
+    title: "难度",
+    slotName: "difficulty",
+    width: 80,
   },
   {
     title: "标签",
@@ -225,28 +188,5 @@ const doSubmit = () => {
 #questionsView {
   max-width: 1280px;
   margin: 0 auto;
-}
-.notice-card {
-  margin-bottom: 20px;
-  background: linear-gradient(to right, #e6f7ff, #ffffff);
-}
-.notice-content {
-  padding: 20px 40px;
-  text-align: center;
-}
-.notice-title {
-  margin-bottom: 10px;
-  color: #165dff;
-  font-size: 18px;
-}
-.notice-text {
-  margin-bottom: 10px;
-  color: #333;
-  font-size: 14px;
-  line-height: 1.6;
-}
-.notice-time {
-  color: #999;
-  font-size: 12px;
 }
 </style>

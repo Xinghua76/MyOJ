@@ -17,6 +17,7 @@ public class JavaLanguageJudgeStrategy implements JudgeStrategy {
 
     /**
      * 执行判题
+     * 
      * @param judgeContext
      * @return
      */
@@ -68,9 +69,8 @@ public class JavaLanguageJudgeStrategy implements JudgeStrategy {
             judgeInfoResponse.setMessage(judgeInfoMessageEnum.getValue());
             return judgeInfoResponse;
         }
-        // Java 程序本身需要额外执行 10 秒钟
-        long JAVA_PROGRAM_TIME_COST = 10000L;
-        if ((time - JAVA_PROGRAM_TIME_COST) > needTimeLimit) {
+        // 直接按沙箱统计的执行时间进行判定，避免因固定扣减导致超时误判为通过
+        if (time > needTimeLimit) {
             judgeInfoMessageEnum = JudgeInfoMessageEnum.TIME_LIMIT_EXCEEDED;
             judgeInfoResponse.setMessage(judgeInfoMessageEnum.getValue());
             return judgeInfoResponse;

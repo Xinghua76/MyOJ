@@ -4,16 +4,16 @@
       <a-layout-header class="header">
         <div class="header-left">
           <a-button type="text" @click="router.back()">
-            <icon-arrow-left /> 杩斿洖姣旇禌璇︽儏
+            <icon-arrow-left /> 返回比赛详情
           </a-button>
           <span class="contest-title">{{ contest?.title }}</span>
         </div>
         <div class="header-right">
           <span v-if="contestStatus === 1" class="timer">
-            <icon-clock-circle /> 鍓╀綑鏃堕棿锛歿{ countdownText }}
+            <icon-clock-circle /> 剩余时间：{{ countdownText }}
           </span>
           <span v-else-if="contestStatus === 2" class="timer ended">
-            姣旇禌宸茬粨鏉?
+            比赛已结束
           </span>
         </div>
       </a-layout-header>
@@ -26,7 +26,7 @@
           :collapsed="collapsed"
           @collapse="onCollapse"
         >
-          <div class="menu-title">棰樼洰鍒楄〃</div>
+          <div class="menu-title">题目列表</div>
           <a-menu
             :selected-keys="[String(currentQuestionId)]"
             @menu-item-click="handleMenuClick"
@@ -40,7 +40,7 @@
                   String.fromCharCode(65 + index)
                 }}</span>
                 <span class="question-title">{{
-                  item.questionVO?.title || "棰樼洰"
+                  item.questionVO?.title || "题目"
                 }}</span>
                 <span v-if="userQuestionStatus[item.questionId] === 2">
                   <icon-check-circle-fill style="color: green" />
@@ -54,7 +54,7 @@
         </a-layout-sider>
         <a-layout-content class="content">
           <a-tabs type="card-gutter" v-model:active-key="activeTab">
-            <a-tab-pane key="solve" title="鍋氶">
+            <a-tab-pane key="solve" title="做题">
               <!-- 鍋氶鍖哄煙锛岄€昏緫澶嶇敤 ViewQuestionView -->
               <div v-if="currentQuestionId && question" class="solve-container">
                 <a-split
@@ -90,13 +90,13 @@
                           :column="{ xs: 1, md: 2, lg: 3 }"
                           size="small"
                         >
-                          <a-descriptions-item label="鏃堕棿闄愬埗">
+                          <a-descriptions-item label="时间限制">
                             {{ question.judgeConfig.timeLimit ?? 0 }}
                           </a-descriptions-item>
-                          <a-descriptions-item label="鍐呭瓨闄愬埗">
+                          <a-descriptions-item label="内存限制">
                             {{ question.judgeConfig.memoryLimit ?? 0 }}
                           </a-descriptions-item>
-                          <a-descriptions-item label="鍫嗘爤闄愬埗">
+                          <a-descriptions-item label="堆栈限制">
                             {{ question.judgeConfig.stackLimit ?? 0 }}
                           </a-descriptions-item>
                         </a-descriptions>
@@ -108,13 +108,13 @@
                   <template #second>
                     <div class="pane-content right-pane">
                       <a-tabs v-model:active-key="codeActiveKey">
-                        <a-tab-pane key="code" title="浠ｇ爜缂栬緫">
+                        <a-tab-pane key="code" title="代码编辑">
                           <div class="code-editor-container">
                             <div class="code-toolbar">
                               <a-select
                                 v-model="form.language"
                                 :style="{ width: '150px' }"
-                                placeholder="閫夋嫨璇█"
+                                placeholder="选择语言"
                                 size="small"
                               >
                                 <a-option>java</a-option>
@@ -128,7 +128,7 @@
                                 @click="doSubmit"
                                 :loading="submitting"
                               >
-                                鎻愪氦浠ｇ爜
+                                提交代码
                               </a-button>
                             </div>
                             <CodeEditor
@@ -348,11 +348,11 @@ const countdownText = computed(() => {
 });
 
 const rankColumns = [
-  { title: "鎺掑悕", slotName: "rank", width: 80 },
-  { title: "鐢ㄦ埛", slotName: "user" },
+  { title: "排名", slotName: "rank", width: 80 },
+  { title: "用户", slotName: "user" },
   { title: "解决数", dataIndex: "solvedCount" },
-  { title: "鎬诲垎", dataIndex: "totalScore" },
-  { title: "缃氭椂", dataIndex: "penalty" },
+  { title: "总分", dataIndex: "totalScore" },
+  { title: "罚时", dataIndex: "penalty" },
 ];
 
 // --- Methods ---
@@ -453,7 +453,7 @@ const loadQuestionDetail = async (qId: string) => {
     question.value = res.data;
     loadDraft(qId);
   } else {
-    message.error("鍔犺浇棰樼洰澶辫触: " + res.message);
+    message.error("加载题目失败: " + res.message);
   }
 };
 
@@ -513,16 +513,16 @@ const doSubmit = async () => {
       contestId: props.contestId as any,
     } as unknown as QuestionSubmitAddRequest);
     if (res.code === 0) {
-      message.success("鎻愪氦鎴愬姛");
+      message.success("提交成功");
       codeActiveKey.value = "result";
       submitResult.value = { status: 1, judgeInfo: {} } as QuestionSubmitVO;
       pollSubmitResult(res.data);
       // Update status map tentatively (not accurate until judged, but shows activity)
     } else {
-      message.error("鎻愪氦澶辫触: " + res.message);
+      message.error("提交失败: " + res.message);
     }
   } catch (e) {
-    message.error("鎻愪氦鍑洪敊: " + (e as Error).message);
+    message.error("提交出错: " + (e as Error).message);
   } finally {
     submitting.value = false;
   }

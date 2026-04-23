@@ -11,6 +11,7 @@ import com.yupi.yuoj.judge.codesandbox.model.ExecuteCodeResponse;
 import com.yupi.yuoj.judge.strategy.JudgeContext;
 import com.yupi.yuoj.mapper.QuestionMapper;
 import com.yupi.yuoj.model.dto.question.JudgeCase;
+import com.yupi.yuoj.model.dto.question.JudgeConfig;
 import com.yupi.yuoj.judge.codesandbox.model.JudgeInfo;
 import com.yupi.yuoj.model.entity.Question;
 import com.yupi.yuoj.model.entity.QuestionSubmit;
@@ -121,6 +122,48 @@ public class JudgeServiceImpl implements JudgeService {
             }
             return questionSubmitService.getById(questionSubmitId);
         }
+
+        // 兜底校验：按沙箱返回的 time / memory 直接校验题目限制，避免超限被误判为通过
+        JudgeConfig judgeConfig = JSONUtil.toBean(question.getJudgeConfig(), JudgeConfig.class);
+        Long needTimeLimit = Optional.ofNullable(judgeConfig).map(JudgeConfig::getTimeLimit).orElse(null);
+        Long needMemoryLimit = Optional.ofNullable(judgeConfig).map(JudgeConfig::getMemoryLimit).orElse(null);
+        Long actualTime = Optional.ofNullable(sandboxJudgeInfo.getTime()).orElse(0L);
+        Long actualMemory = Optional.ofNullable(sandboxJudgeInfo.getMemory()).orElse(0L);
+
+        if (needTimeLimit != null && actualTime > needTimeLimit) {
+            JudgeInfo judgeInfo = new JudgeInfo();
+            judgeInfo.setMessage(JudgeInfoMessageEnum.TIME_LIMIT_EXCEEDED.getValue());
+            judgeInfo.setTime(actualTime);
+            judgeInfo.setMemory(actualMemory);
+
+            questionSubmitUpdate = new QuestionSubmit();
+            questionSubmitUpdate.setId(questionSubmitId);
+            questionSubmitUpdate.setStatus(QuestionSubmitStatusEnum.SUCCEED.getValue());
+            questionSubmitUpdate.setJudgeInfo(JSONUtil.toJsonStr(judgeInfo));
+            update = questionSubmitService.updateById(questionSubmitUpdate);
+            if (!update) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "题目状态更新错误");
+            }
+            return questionSubmitService.getById(questionSubmitId);
+        }
+
+        if (needMemoryLimit != null && actualMemory > needMemoryLimit) {
+            JudgeInfo judgeInfo = new JudgeInfo();
+            judgeInfo.setMessage(JudgeInfoMessageEnum.MEMORY_LIMIT_EXCEEDED.getValue());
+            judgeInfo.setTime(actualTime);
+            judgeInfo.setMemory(actualMemory);
+
+            questionSubmitUpdate = new QuestionSubmit();
+            questionSubmitUpdate.setId(questionSubmitId);
+            questionSubmitUpdate.setStatus(QuestionSubmitStatusEnum.SUCCEED.getValue());
+            questionSubmitUpdate.setJudgeInfo(JSONUtil.toJsonStr(judgeInfo));
+            update = questionSubmitService.updateById(questionSubmitUpdate);
+            if (!update) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "题目状态更新错误");
+            }
+            return questionSubmitService.getById(questionSubmitId);
+        }
+
         // 5）根据沙箱的执行结果，设置题目的判题状态和信息
         JudgeContext judgeContext = new JudgeContext();
         judgeContext.setJudgeInfo(sandboxJudgeInfo);

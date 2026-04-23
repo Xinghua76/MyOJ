@@ -65,6 +65,13 @@
         :row-selection="rowSelection"
         v-model:selectedKeys="selectedKeys"
       >
+        <template #difficulty="{ record }">
+          <a-tag v-if="record.difficulty === 1" color="green"> 简单 </a-tag>
+          <a-tag v-else-if="record.difficulty === 2" color="orange">
+            中等
+          </a-tag>
+          <a-tag v-else-if="record.difficulty === 3" color="red"> 困难 </a-tag>
+        </template>
         <template #tags="{ record }">
           <a-space wrap>
             <a-tag
@@ -158,6 +165,11 @@ const columns = [
   {
     title: "标题",
     dataIndex: "title",
+  },
+  {
+    title: "难度",
+    slotName: "difficulty",
+    width: 80,
   },
   {
     title: "标签",

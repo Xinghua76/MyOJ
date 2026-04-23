@@ -27,6 +27,17 @@
               </a-form-item>
             </a-col>
           </a-row>
+          <a-row :gutter="24">
+            <a-col :span="12">
+              <a-form-item field="difficulty" label="难度">
+                <a-select
+                  v-model="form.difficulty"
+                  :options="DIFFICULTY_OPTIONS"
+                  placeholder="请选择难度"
+                />
+              </a-form-item>
+            </a-col>
+          </a-row>
           <a-form-item field="content" label="题目描述">
             <MdEditor :value="form.content" :handle-change="onContentChange" />
           </a-form-item>
@@ -171,6 +182,12 @@ const TAG_OPTIONS = [
   { label: "数学", value: "数学" },
 ];
 
+const DIFFICULTY_OPTIONS = [
+  { label: "简单", value: 1 },
+  { label: "中等", value: 2 },
+  { label: "困难", value: 3 },
+];
+
 // 如果页面地址包含 update，则视为更新页面
 const updatePage = route.path.includes("update");
 
@@ -179,6 +196,7 @@ let form = ref({
   tags: [],
   answer: "",
   content: "",
+  difficulty: 1,
   judgeConfig: {
     memoryLimit: 1000,
     stackLimit: 1000,

@@ -173,11 +173,15 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
                 statsCmd.exec(statisticsResultCallback);
                 try {
                     stopWatch.start();
-                    dockerClient.execStartCmd(execId)
+                    boolean finished = dockerClient.execStartCmd(execId)
                             .exec(execStartResultCallback)
-                            .awaitCompletion(TIME_OUT, TimeUnit.MICROSECONDS);
+                            .awaitCompletion(TIME_OUT, TimeUnit.MILLISECONDS);
                     stopWatch.stop();
                     time = stopWatch.getLastTaskTimeMillis();
+                    if (!finished || timeout[0]) {
+                        errorMessage[0] = "Time Limit Exceeded";
+                        time = TIME_OUT;
+                    }
                     statsCmd.close();
                 } catch (InterruptedException e) {
                     System.out.println("程序执行异常");

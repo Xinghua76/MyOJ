@@ -42,20 +42,26 @@
           <a-col :xs="24" :sm="12" :md="6">
             <a-statistic
               title="开始时间"
-              :value="formatTime(contest.startTime)"
+              :value="formatTime(contest.startTime) as any"
             />
           </a-col>
           <a-col :xs="24" :sm="12" :md="6">
             <a-statistic
               title="结束时间"
-              :value="formatTime(contest.endTime)"
+              :value="formatTime(contest.endTime) as any"
             />
           </a-col>
           <a-col :xs="24" :sm="12" :md="6">
-            <a-statistic title="比赛时长" :value="durationText" />
+            <a-card size="small" class="text-stat-card">
+              <div class="text-stat-title">比赛时长</div>
+              <div class="text-stat-value">{{ durationText }}</div>
+            </a-card>
           </a-col>
           <a-col :xs="24" :sm="12" :md="6">
-            <a-statistic title="当前倒计时" :value="countdownText" />
+            <a-card size="small" class="text-stat-card">
+              <div class="text-stat-title">当前倒计时</div>
+              <div class="text-stat-value">{{ countdownText }}</div>
+            </a-card>
           </a-col>
         </a-row>
 
@@ -161,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineProps, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   ContestControllerService,
   ContestQuestionControllerService,
@@ -206,8 +212,8 @@ const contestStatus = computed(() => {
     return -1;
   }
   const now = currentTime.value;
-  const start = new Date(contest.value.startTime as any).getTime();
-  const end = new Date(contest.value.endTime as any).getTime();
+  const start = parseTimestamp(contest.value.startTime);
+  const end = parseTimestamp(contest.value.endTime);
   if (Number.isNaN(start) || Number.isNaN(end)) {
     return -1;
   }
@@ -238,8 +244,11 @@ const countdownText = computed(() => {
     return "-";
   }
   const now = currentTime.value;
-  const start = new Date(contest.value.startTime as any).getTime();
-  const end = new Date(contest.value.endTime as any).getTime();
+  const start = parseTimestamp(contest.value.startTime);
+  const end = parseTimestamp(contest.value.endTime);
+  if (Number.isNaN(start) || Number.isNaN(end)) {
+    return "-";
+  }
   let target = 0;
   if (contestStatus.value === 0) {
     target = start;
@@ -260,11 +269,12 @@ const durationText = computed(() => {
   if (!contest.value?.startTime || !contest.value?.endTime) {
     return "-";
   }
-  const diff = Math.max(
-    new Date(contest.value.endTime as any).getTime() -
-      new Date(contest.value.startTime as any).getTime(),
-    0
-  );
+  const start = parseTimestamp(contest.value.startTime);
+  const end = parseTimestamp(contest.value.endTime);
+  if (Number.isNaN(start) || Number.isNaN(end)) {
+    return "-";
+  }
+  const diff = Math.max(end - start, 0);
   const duration = moment.duration(diff);
   const hours = Math.floor(duration.asHours());
   const minutes = duration.minutes();
@@ -321,8 +331,41 @@ const rankColumns = [
   { title: "罚时", slotName: "penalty", width: 140 },
 ];
 
+const parseTimestamp = (value: any): number => {
+  if (value === null || value === undefined || value === "") {
+    return Number.NaN;
+  }
+  if (typeof value === "number") {
+    return value;
+  }
+
+  const raw = String(value).trim();
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+
+  const strictIso = moment(normalized, moment.ISO_8601, true);
+  if (strictIso.isValid()) {
+    return strictIso.valueOf();
+  }
+
+  const common = moment(raw, [
+    "YYYY-MM-DD HH:mm:ss",
+    "YYYY-MM-DD HH:mm",
+    "YYYY/MM/DD HH:mm:ss",
+    "YYYY/MM/DD HH:mm",
+  ]);
+  if (common.isValid()) {
+    return common.valueOf();
+  }
+
+  return new Date(normalized).getTime();
+};
+
 const formatTime = (value: any) => {
-  return value ? moment(value).format("YYYY-MM-DD HH:mm:ss") : "-";
+  const timestamp = parseTimestamp(value);
+  if (Number.isNaN(timestamp)) {
+    return "-";
+  }
+  return moment(timestamp).format("YYYY-MM-DD HH:mm:ss");
 };
 
 const formatPenalty = (penalty?: number) => {
@@ -341,7 +384,7 @@ const loadContest = async () => {
   if (res.code !== 0) {
     throw new Error(res.message);
   }
-  contest.value = res.data;
+  contest.value = res.data as any;
 };
 
 const loadSignupState = async () => {
@@ -529,5 +572,23 @@ onUnmounted(() => {
   max-width: 1280px;
   margin: 0 auto;
   padding: 0 12px 24px;
+}
+
+.text-stat-card {
+  height: 100%;
+}
+
+.text-stat-title {
+  color: #86909c;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.text-stat-value {
+  color: #1d2129;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+  word-break: break-all;
 }
 </style>
